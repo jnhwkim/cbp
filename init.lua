@@ -10,7 +10,7 @@ unpack = unpack or table.unpack
 torch.include('cbp', 'test.lua')
 
 -- support modules
-torch.include('cbp', 'CompactBilnearPooling.lua')
+torch.include('cbp', 'CompactBilinearPooling.lua')
 
 -- prevent likely name conflicts
 nn.cbp = cbp
