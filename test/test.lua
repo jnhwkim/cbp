@@ -28,6 +28,14 @@ function cbptest.testConv()
    c:conv(x,y)
    ans:add(-c.output)
    assert(ans:norm() < precision, ans:norm())
+
+   local x = torch.CudaTensor{{1,2,3,1,1},{2,3,4,1,1}}
+   local y = torch.CudaTensor{{1,1,1,1,1},{2,2,2,1,1}}
+   local c = nn.CompactBilinearPooling(x:size(2))
+   local ans = torch.CudaTensor{{8,8,8,8,8},{20,19,17,15,17}}
+   c:conv(x,y)
+   ans:add(-c.output)
+   assert(ans:norm() < precision, ans:norm())
 end
 
 function cbptest.testGrad()
