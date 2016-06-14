@@ -8,6 +8,7 @@ function CompactBilinearPooling:__init(outputSize, homogeneous)
    self.outputSize = outputSize
    self.homogeneous = homogeneous
    self:reset()
+   self.debug = false
 end
 
 function CompactBilinearPooling:reset()
@@ -38,15 +39,8 @@ function CompactBilinearPooling:psi()
            self.y[i][self.h[1][j]] = y_ + self.s[1][j]*self.input[i][j]
         end
       else
-         for j=1,self.h[i]:size(#self.h[i]:size()) do
-            if 1 == #self.input[i]:size() then
-               local y_ = self.y[i][self.h[i][j]]
-               y_ = y_ + self.s[i][j]*self.input[i][j]
-            elseif 2 == #self.input[i]:size() then
-               local y_ = self.y[i][{{},{self.h[i][j]}}]
-               y_ = y_:add(self.s[i][j]*self.input[i][{{},{j}}])
-            end
-         end
+         local batchSize = self.input[1]:size(1)
+         self.y[i]:indexAdd(2,self.h[i],torch.cmul(self.s[i]:repeatTensor(batchSize,1),self.input[i]))
       end
    end
 end
@@ -61,10 +55,10 @@ function CompactBilinearPooling:conv(x, y)
       for j=1,x:size(2) do  -- in
          local tmp = torch.cmul(x[{{},{j,x:size(2)}}], y[{{},{1,x:size(2)-j+1}}])
          self.output[{{},{j}}]:add(tmp:sum(2))
-      end
-      for j=1,x:size(2)-1 do  -- out
-         local tmp = torch.cmul(x[{{},{1,j}}], y[{{},{y:size(2)-j+1,y:size(2)}}])
-         self.output[{{},{j+1}}]:add(tmp:sum(2))
+         if j~=1 then
+            local tmp = torch.cmul(x[{{},{1,j-1}}], y[{{},{y:size(2)-j+2,y:size(2)}}])
+            self.output[{{},{j}}]:add(tmp:sum(2))
+         end
       end
    end
    return self.output
@@ -85,6 +79,7 @@ function CompactBilinearPooling:elt(x, y, offset)
 end
 
 function CompactBilinearPooling:updateOutput(input)
+   if self.debug then sys.tic(1) end
    self.input = input
    local inputSizes1 = input[1]:size()
    local inputSizes2 = input[2]:size()
@@ -102,8 +97,11 @@ function CompactBilinearPooling:updateOutput(input)
    else
       assert(false, '# of dimensions > 2')
    end
+   if self.debug then print('pre:', sys.toc(1)) end
    self:psi()
+   if self.debug then print('psi:', sys.toc(1)) end
    self:conv(self.y[1], self.y[2])
+   if self.debug then print('conv:', sys.toc(1)) end
 
    return self.output
 end
