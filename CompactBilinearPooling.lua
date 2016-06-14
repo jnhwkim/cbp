@@ -1,7 +1,5 @@
 local CompactBilinearPooling, parent = torch.class('nn.CompactBilinearPooling', 'nn.Module')
 
-require 'cunn'
-
 -- Reference: 
 -- Multimodal Compact Bilinear Pooling for Visual Question Answering and Visual Grounding
 -- Fukui et al. (2016) http://arxiv.org/abs/1606.01847
@@ -51,39 +49,32 @@ function CompactBilinearPooling:psi()
    end
 end
 
-function CompactBilinearPooling:convfft(x, y)
-   if not self.module then
-      self.module = nn.TemporalConvolution(1, 1, x:size(#x:size()))
-      self.module.weight=self.module.weight:typeAs(x)
-      self.module.bias=self.module.bias:typeAs(x)
-      self.module.output=self.module.output:typeAs(x)
-   end
-   self.module.bias:zero()
-   local function calc(x,y)
-      local dim = y:size(#y:size())
-      self.module.weight:copy(x)
-      self.tmp=self.tmp:typeAs(y)
-      self.tmp:resize(1,dim*2-1,1):zero()
-      self.tmp[{{},{dim,dim*2-1},{}}]:copy(y)  -- left-padding
-      return self.module:forward(self.tmp)
-   end
+function CompactBilinearPooling:conv(x, y)
    self.output = self.output:typeAs(x)
+   self.output:resizeAs(x):zero()
    if 1 == #x:size() then
-      self.output:resizeAs(x)
-      self.output:copy(calc(x,y))
-      return self.output
+      assert('not implemented')
    elseif 2 == #x:size() then
-      self.output:resizeAs(x)
-      for i=1,x:size(1) do
-         require 'sys'
-         sys.tic()
-         self.output[i]:copy(calc(x[i],y[i]))
-         print(sys.toc())
+      assert(x:size(1)==y:size(1), 'should the same batch size')
+      assert(x:size(2)==y:size(2), 'should the same dim size')
+      local str_idx = math.floor(x:size(2)/2) + 1
+      for j=str_idx,x:size(2) do  -- first half
+         local tmp = x[{{},{j,x:size(2)}}]:clone()
+         tmp:cmul(y:narrow(2,j-str_idx+1,x:size(2)-j+1))
+         self.output[{{},{j-str_idx+1}}]:add(tmp:sum(2))
+      end
+      local end_idx = math.floor(x:size(2)/2)
+      for j=end_idx,x:size(2) do
+         local tmp = x[{{},{1,j}}]:clone():typeAs(x)
+         tmp:cmul(y[{{},{y:size(2)-j+1,y:size(2)}}])
+         self.output[{{},{j-end_idx+1}}]:add(tmp:sum(2))
       end
    end
+   return self.output
 end
 
-function CompactBilinearPooling:updateOutput(input)
+function CompactBilinearPooling:func(params, x, y)
+   local input = {x,y}
    self.input = input
    local inputSizes1 = input[1]:size()
    local inputSizes2 = input[2]:size()
@@ -103,6 +94,15 @@ function CompactBilinearPooling:updateOutput(input)
    end
    self.y=self.y:typeAs(input[1])
    self:psi()
+   self:conv(self.y[1], self.y[2])
+   return self.output
+end
 
-   self:convfft(self.y[1], self.y[2])
+function CompactBilinearPooling:updateOutput(input)
+   self.output = self:func(nil, input[1], input[2])
+   return self.output
+end
+
+function CompactBilinearPooling:updateGradInput(input, gradOutput)
+
 end

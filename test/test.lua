@@ -1,4 +1,5 @@
 require 'nn'
+require 'cunn'
 
 local cbptest = torch.TestSuite()
 local precision = 1e-5
@@ -17,6 +18,20 @@ function cbptest.testPsi()
    end
    local diff = math.abs(tmp/S - x*y)
    assert(diff / (x*y) < .1, 'error_ratio='..diff / (x*y)..', E[<phi(x,h,s),phi(y,h,s)>]=<x,y>')
+end
+
+function cbptest.testConv()
+   local x = torch.CudaTensor{{1,2,3},{2,3,4}}
+   local y = torch.CudaTensor{{1,1,1},{2,2,2}}
+   local c = nn.CompactBilinearPooling(x:size(2))
+   local ans = torch.CudaTensor{{6,6,6},{18,18,18}}
+   c:conv(x,y)
+   ans:add(-c.output)
+   assert(ans:norm() < precision, ans:norm())
+end
+
+function cbptest.testGrad()
+   assert(true)
 end
 
 function cbp.test(tests)
