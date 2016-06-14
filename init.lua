@@ -11,6 +11,7 @@ torch.include('cbp', 'test.lua')
 
 -- support modules
 torch.include('cbp', 'CompactBilinearPooling.lua')
+torch.include('cbp', 'SignedSquareRoot.lua')
 
 -- prevent likely name conflicts
 nn.cbp = cbp

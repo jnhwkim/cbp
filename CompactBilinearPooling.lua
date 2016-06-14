@@ -4,17 +4,20 @@ local CompactBilinearPooling, parent = torch.class('nn.CompactBilinearPooling', 
 -- Multimodal Compact Bilinear Pooling for Visual Question Answering and Visual Grounding
 -- Fukui et al. (2016) http://arxiv.org/abs/1606.01847
 function CompactBilinearPooling:__init(outputSize, homogeneous)
+   assert(outputSize and outputSize >= 1, 'missing outputSize!')
    self.outputSize = outputSize
    self.homogeneous = homogeneous
-   self.tmp = torch.Tensor()
    self:reset()
 end
 
 function CompactBilinearPooling:reset()
-   self.h = torch.LongTensor()
-   self.s = torch.IntTensor()
+   self.h = torch.Tensor()
+   self.s = torch.Tensor()
    self.y = torch.Tensor()
    self.output = torch.Tensor()
+   self.gradInput = torch.Tensor()
+   self.tmp = torch.Tensor()
+   self._tmp = torch.Tensor()
 end
 
 function CompactBilinearPooling:sample()
@@ -45,32 +48,40 @@ function CompactBilinearPooling:psi()
             end
          end
       end
-      self.y:typeAs(self.input[i])
    end
 end
 
 function CompactBilinearPooling:conv(x, y)
-   self.output = self.output:typeAs(x)
    self.output:resizeAs(x):zero()
    if 1 == #x:size() then
       assert('not implemented')
    elseif 2 == #x:size() then
       assert(x:size(1)==y:size(1), 'should the same batch size')
       assert(x:size(2)==y:size(2), 'should the same dim size')
-      local str_idx = math.floor(x:size(2)/2) + 1
       for j=1,x:size(2) do  -- in
-         local tmp = x[{{},{j,x:size(2)}}]:clone()
-         tmp:cmul(y:narrow(2,1,x:size(2)-j+1))
+         local tmp = torch.cmul(x[{{},{j,x:size(2)}}], y[{{},{1,x:size(2)-j+1}}])
          self.output[{{},{j}}]:add(tmp:sum(2))
       end
-      local end_idx = math.floor(x:size(2)/2)
       for j=1,x:size(2)-1 do  -- out
-         local tmp = x[{{},{1,j}}]:clone():typeAs(x)
-         tmp:cmul(y[{{},{y:size(2)-j+1,y:size(2)}}])
+         local tmp = torch.cmul(x[{{},{1,j}}], y[{{},{y:size(2)-j+1,y:size(2)}}])
          self.output[{{},{j+1}}]:add(tmp:sum(2))
       end
    end
    return self.output
+end
+
+function CompactBilinearPooling:elt(x, y, offset)
+   assert(x:size(1)==y:size(1), 'should the same batch size')
+   assert(x:size(2)==y:size(2), 'should the same dim size')
+   self._tmp:resize(x:size(1))
+   local dim = x:size(2)
+   local _tmp = torch.cmul(x[{{},{dim-offset+1,dim}}], y[{{},{1,offset}}])
+   self._tmp:copy(_tmp:sum(2))
+   if dim ~= offset then
+      _tmp = torch.cmul(x[{{},{1,dim-offset}}], y[{{},{offset+1,dim}}])
+      self._tmp:add(_tmp:sum(2))
+   end
+   return self._tmp
 end
 
 function CompactBilinearPooling:updateOutput(input)
@@ -91,7 +102,6 @@ function CompactBilinearPooling:updateOutput(input)
    else
       assert(false, '# of dimensions > 2')
    end
-   self.y=self.y:typeAs(input[1])
    self:psi()
    self:conv(self.y[1], self.y[2])
 
@@ -99,5 +109,18 @@ function CompactBilinearPooling:updateOutput(input)
 end
 
 function CompactBilinearPooling:updateGradInput(input, gradOutput)
-   
+   local dim = input[1]:size(2)
+   local batchSize = input[1]:size(1)
+   self.gradInput:resizeAs(input[1]):zero()
+   self.tmp:resizeAs(self.gradInput):zero()
+
+   for k=1,2 do
+      for i=1,dim do
+         self.tmp[{{},{i}}]:add(self:elt(self.y[k%2+1],gradOutput,self.h[k][i]))
+      end
+      self.tmp:cmul(self.s[k]:repeatTensor(batchSize,1))
+      self.gradInput:add(self.tmp)
+   end
+
+   return self.gradInput
 end

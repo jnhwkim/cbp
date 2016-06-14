@@ -21,25 +21,34 @@ function cbptest.testPsi()
 end
 
 function cbptest.testConv()
-   local x = torch.CudaTensor{{1,2,3},{2,3,4}}
-   local y = torch.CudaTensor{{1,1,1},{2,2,2}}
+   local x = torch.Tensor{{1,2,3},{2,3,4}}
+   local y = torch.Tensor{{1,1,1},{2,2,2}}
    local c = nn.CompactBilinearPooling(x:size(2))
-   local ans = torch.CudaTensor{{6,6,6},{18,18,18}}
+   local ans = torch.Tensor{{6,6,6},{18,18,18}}
    c:conv(x,y)
    ans:add(-c.output)
    assert(ans:norm() < precision, ans:norm())
 
-   local x = torch.CudaTensor{{1,2,3,1,1},{2,3,4,1,1}}
-   local y = torch.CudaTensor{{1,1,1,1,1},{2,2,2,1,1}}
+   local x = torch.Tensor{{1,2,3,1,1},{2,3,4,1,1}}
+   local y = torch.Tensor{{1,1,1,1,1},{2,2,2,1,1}}
    local c = nn.CompactBilinearPooling(x:size(2))
-   local ans = torch.CudaTensor{{8,8,8,8,8},{20,19,17,15,17}}
+   local ans = torch.Tensor{{8,8,8,8,8},{20,19,17,15,17}}
    c:conv(x,y)
    ans:add(-c.output)
    assert(ans:norm() < precision, ans:norm())
 end
 
 function cbptest.testGrad()
-   assert(true)
+   -- local x = torch.Tensor{{1,2,3},{2,3,4}}
+   -- local y = torch.Tensor{{1,1,1},{2,2,2}}
+   -- local c = nn.CompactBilinearPooling(x:size(2))
+   -- local diff = torch.Tensor{{6,6,6},{18,18,18}}
+   -- c:forward{x:add(torch.rand(2,3):mul(precision)),y:add(torch.rand(2,3):mul(precision))}
+   -- diff:add(-c.output):div(precision)
+   -- c:backward({x:add(torch.rand(2,3):mul(precision)),y:add(torch.rand(2,3):mul(precision))}, torch.Tensor(2,3):fill(1))
+   -- local grad = c.gradInput
+   -- local ans = diff:add(-grad)
+   -- assert(ans:norm() < precision, ans:norm())
 end
 
 function cbp.test(tests)
