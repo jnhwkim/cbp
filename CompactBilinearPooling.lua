@@ -73,8 +73,7 @@ function CompactBilinearPooling:conv(x, y)
    return self.output
 end
 
-function CompactBilinearPooling:func(params, x, y)
-   local input = {x,y}
+function CompactBilinearPooling:updateOutput(input)
    self.input = input
    local inputSizes1 = input[1]:size()
    local inputSizes2 = input[2]:size()
@@ -95,14 +94,10 @@ function CompactBilinearPooling:func(params, x, y)
    self.y=self.y:typeAs(input[1])
    self:psi()
    self:conv(self.y[1], self.y[2])
-   return self.output
-end
 
-function CompactBilinearPooling:updateOutput(input)
-   self.output = self:func(nil, input[1], input[2])
    return self.output
 end
 
 function CompactBilinearPooling:updateGradInput(input, gradOutput)
-
+   
 end
