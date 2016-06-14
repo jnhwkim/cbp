@@ -16,18 +16,14 @@ function CompactBilinearPooling:reset()
    self.s = torch.Tensor()
    self.y = torch.Tensor()
    self.output = torch.Tensor()
-   self.gradInput = torch.Tensor()
+   self.gradInput = {}
    self.tmp = torch.Tensor()
    self._tmp = torch.Tensor()
 end
 
 function CompactBilinearPooling:sample()
-   for i=1,2 do
-      for k=1,self.h[i]:size(#self.h[i]:size()) do
-         self.h[i][k] = torch.random(1,self.outputSize)  -- sample from (1,..,C)
-         self.s[i][k] = torch.random(0,1)*2-1  -- sample from (-1,1)
-      end
-   end
+   self.h:uniform(0,self.outputSize):ceil()
+   self.s:uniform(0,2):floor():mul(2):add(-1)
 end
 
 function CompactBilinearPooling:psi()
@@ -64,18 +60,16 @@ function CompactBilinearPooling:conv(x, y)
    return self.output
 end
 
-function CompactBilinearPooling:elt(x, y, offset)
+function CompactBilinearPooling:elt(res, x, y, offset)
    assert(x:size(1)==y:size(1), 'should the same batch size')
    assert(x:size(2)==y:size(2), 'should the same dim size')
-   self._tmp:resize(x:size(1))
    local dim = x:size(2)
-   local _tmp = torch.cmul(x[{{},{dim-offset+1,dim}}], y[{{},{1,offset}}])
-   self._tmp:copy(_tmp:sum(2))
+   local _tmp = torch.cmul(x[{{},{dim-offset+1,dim}}], y[{{},{1,offset}}]):sum(2)
+   res[{{},{offset}}]:copy(_tmp)
    if dim ~= offset then
       _tmp = torch.cmul(x[{{},{1,dim-offset}}], y[{{},{offset+1,dim}}])
-      self._tmp:add(_tmp:sum(2))
+      res[{{},{offset}}]:add(_tmp:sum(2))
    end
-   return self._tmp
 end
 
 function CompactBilinearPooling:updateOutput(input)
@@ -109,15 +103,18 @@ end
 function CompactBilinearPooling:updateGradInput(input, gradOutput)
    local dim = input[1]:size(2)
    local batchSize = input[1]:size(1)
-   self.gradInput:resizeAs(input[1]):zero()
-   self.tmp:resizeAs(self.gradInput):zero()
+   self.gradInput = self.gradInput or {}
 
    for k=1,2 do
-      for i=1,dim do
-         self.tmp[{{},{i}}]:add(self:elt(self.y[k%2+1],gradOutput,self.h[k][i]))
+      self.gradInput[k] = self.gradInput[k] or input[k].new()
+      self.gradInput[k]:resizeAs(input[k]):zero()
+      local tmp = gradOutput.new()
+      tmp:resizeAs(gradOutput)
+      for d=1,gradOutput:size(2) do
+         self:elt(tmp,self.y[k%2+1],gradOutput,d)
       end
-      self.tmp:cmul(self.s[k]:repeatTensor(batchSize,1))
-      self.gradInput:add(self.tmp)
+      self.gradInput[k]:index(tmp, 2, self.h[k])
+      self.gradInput[k]:cmul(self.s[k]:repeatTensor(batchSize,1))
    end
 
    return self.gradInput
