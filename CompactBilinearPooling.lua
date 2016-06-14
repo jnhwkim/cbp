@@ -60,7 +60,7 @@ function CompactBilinearPooling:conv(x, y)
       local str_idx = math.floor(x:size(2)/2) + 1
       for j=str_idx,x:size(2) do  -- first half
          local tmp = x[{{},{j,x:size(2)}}]:clone()
-         tmp:cmul(y:narrow(2,j-str_idx+1,x:size(2)-j+1))
+         tmp:cmul(y:narrow(2,1,x:size(2)-j+1))
          self.output[{{},{j-str_idx+1}}]:add(tmp:sum(2))
       end
       local end_idx = math.floor(x:size(2)/2)
