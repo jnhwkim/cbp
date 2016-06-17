@@ -1,6 +1,6 @@
 local CompactBilinearPooling, parent = torch.class('nn.CompactBilinearPooling', 'nn.Module')
 
-signal = require 'signal'
+require 'spectralnet'
 
 -- Reference: 
 -- Multimodal Compact Bilinear Pooling for Visual Question Answering and Visual Grounding
@@ -17,10 +17,9 @@ function CompactBilinearPooling:reset()
    self.h = torch.Tensor()
    self.s = torch.Tensor()
    self.y = torch.Tensor()
-   self.output = torch.Tensor()
+   -- self.output = torch.Tensor()
    self.gradInput = {}
    self.tmp = torch.Tensor()
-   self._tmp = torch.Tensor()
 end
 
 function CompactBilinearPooling:sample()
@@ -43,67 +42,24 @@ function CompactBilinearPooling:psi()
    end
 end
 
--- function CompactBilinearPooling:conv(x, y)
---    self.output:resizeAs(x):zero()
---    if 1 == #x:size() then
---       assert('not implemented')
---    elseif 2 == #x:size() then
---       assert(x:size(1)==y:size(1), 'should the same batch size')
---       assert(x:size(2)==y:size(2), 'should the same dim size')
---       for j=1,x:size(2) do  -- in
---          local tmp = torch.cmul(x[{{},{j,x:size(2)}}], y[{{},{1,x:size(2)-j+1}}])
---          self.output[{{},{j}}]:add(tmp:sum(2))
---          if j~=1 then
---             local tmp = torch.cmul(x[{{},{1,j-1}}], y[{{},{y:size(2)-j+2,y:size(2)}}])
---             self.output[{{},{j}}]:add(tmp:sum(2))
---          end
---       end
---    end
---    return self.output
--- end
-
-function CompactBilinearPooling:conv(x, y)
+function CompactBilinearPooling:conv(res,x,y)
    local batchSize = x:size(1)
    local dim = x:size(2)
-   self.output:resizeAs(x)
-   for i=1,batchSize do
-      self.output[i]:copy(signal.ifft(signal.fft(x[i]:float()):cmul(signal.fft(y[i]:float())))[{{},{1}}])
+   local function makeComplex(x,y)
+      self.x_ = self.x_ or torch.CudaTensor(x:size(1),1,1,x:size(2),2):zero()
+      self.x_[{{},{1},{1},{},{1}}]:copy(x)
+      self.y_ = self.y_ or torch.CudaTensor(y:size(1),1,1,y:size(2),2):zero()
+      self.y_[{{},{1},{1},{},{1}}]:copy(y)
    end
-   return self.output
-end
-
--- require 'spectralnet'
--- function CompactBilinearPooling:conv(x,y)
---    local batchSize = x:size(1)
---    local dim = x:size(2)
---    local function makeComplex(res, x)
---       res[{{},{1},{1},{},{1}}]:copy(x)
---       return res:resize(x:size(1),1,1,x:size(2)*2)
---    end
---    self.x_ = self.x_ or torch.CudaTensor(x:size(1),1,1,x:size(2),2):zero()
---    self.y_ = self.y_ or torch.CudaTensor(y:size(1),1,1,y:size(2),2):zero()
---    makeComplex(self.x_, x)
---    makeComplex(self.y_, y)
---    self.output:resize(batchSize,1,1,dim*2)
---    self.fft_x = self.fft_x or torch.CudaTensor(batchSize,1,1,dim,2)
---    self.fft_y = self.fft_y or torch.CudaTensor(batchSize,1,1,dim,2)
---    cufft.fft1d(self.x_, self.fft_x)
---    cufft.fft1d(self.y_, self.fft_y)
---    cufft.ifft1d(torch.cmul(self.fft_x,self.fft_y),self.output)
---    self.output=self.output:resize(batchSize,1,1,dim,2):select(2,1):select(2,1):select(3,1)
---    return self.output
--- end
-
-function CompactBilinearPooling:elt(res, x, y, offset)
-   assert(x:size(1)==y:size(1), 'should the same batch size')
-   assert(x:size(2)==y:size(2), 'should the same dim size')
-   local dim = x:size(2)
-   local _tmp = torch.cmul(x[{{},{dim-offset+1,dim}}], y[{{},{1,offset}}]):sum(2)
-   res[{{},{offset}}]:copy(_tmp)
-   if dim ~= offset then
-      _tmp = torch.cmul(x[{{},{1,dim-offset}}], y[{{},{offset+1,dim}}])
-      res[{{},{offset}}]:add(_tmp:sum(2))
-   end
+   makeComplex(x,y)
+   self.fft_x = self.fft_x or torch.CudaTensor(batchSize,1,1,dim,2)
+   self.fft_y = self.fft_y or torch.CudaTensor(batchSize,1,1,dim,2)
+   res = res or torch.CudaTensor()
+   res:resize(batchSize,1,1,dim*2)
+   cufft.fft1d(self.x_:view(x:size(1),1,1,-1), self.fft_x)
+   cufft.fft1d(self.y_:view(y:size(1),1,1,-1), self.fft_y)
+   cufft.ifft1d(self.fft_x:cmul(self.fft_y), res)
+   return res:view(batchSize,1,1,dim,2)[{{},{1},{1},{1}}]:squeeze()
 end
 
 function CompactBilinearPooling:updateOutput(input)
@@ -128,7 +84,7 @@ function CompactBilinearPooling:updateOutput(input)
    if self.debug then print('pre:', sys.toc(1)) end
    self:psi()
    if self.debug then print('psi:', sys.toc(1)) end
-   self:conv(self.y[1], self.y[2])
+   self:conv(self.output, self.y[1], self.y[2])
    if self.debug then print('conv:', sys.toc(1)) end
 
    return self.output
@@ -142,15 +98,15 @@ function CompactBilinearPooling:updateGradInput(input, gradOutput)
    for k=1,2 do
       self.gradInput[k] = self.gradInput[k] or input[k].new()
       self.gradInput[k]:resizeAs(input[k]):zero()
-      local tmp = gradOutput.new()
-      tmp:resizeAs(gradOutput)
-      -- for d=1,gradOutput:size(2) do
-      --    self:elt(tmp,self.y[k%2+1],gradOutput,d)
-      -- end
-      for i=1,batchSize do
-         tmp[i]:copy(signal.ifft(signal.fft(self.y[k%2+1][i]:float()):cmul(signal.fft(gradOutput[i]:float())))[{{},{1}}])
+      self.tmp = self.tmp or gradOutput.new()
+      self.tmp:resizeAs(gradOutput)
+
+      if 1==k then
+         self.tmp = self:conv(self.tmp, self.y[k%2+1], gradOutput)
+      else
+         self.tmp = self:conv(self.tmp, gradOutput, self.y[k%2+1])
       end
-      self.gradInput[k]:index(tmp, 2, self.h[k])
+      self.gradInput[k]:index(self.tmp, 2, self.h[k])
       self.gradInput[k]:cmul(self.s[k]:repeatTensor(batchSize,1))
    end
 
