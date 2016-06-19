@@ -100,11 +100,7 @@ function CompactBilinearPooling:updateGradInput(input, gradOutput)
       self.tmp = self.tmp or gradOutput.new()
       self.tmp:resizeAs(gradOutput)
 
-      if 1==k then
-         self.tmp = self:conv(self.y[k%2+1], gradOutput)
-      else
-         self.tmp = self:conv(gradOutput, self.y[k%2+1])
-      end
+      self.tmp = self:conv(gradOutput, self.y[k%2+1])
       self.gradInput[k]:index(self.tmp, 2, self.h[k])
       self.gradInput[k]:cmul(self.s[k]:repeatTensor(batchSize,1))
    end

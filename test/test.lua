@@ -3,6 +3,7 @@ require 'cunn'
 
 local cbptest = torch.TestSuite()
 local precision = 1e-5
+local debug = false
 
 function cbptest.testPsi()
    local homogeneous = true
@@ -43,35 +44,53 @@ function cbptest.testConv()
 end
 
 function cbptest.testLearning()
-   cutorch.manualSeed(123)
-   local N = 100
-   local C = 3
-   local iter = 100
-   local lr = .05
-   local x = torch.rand(N,1)
-   local y = torch.rand(N,1)
-   local t = torch.pow(x,2) + torch.pow(y,2) + torch.cmul(x,y)
+   cutorch.manualSeed(12)
+   local N = 1000
+   local M = 2
+   local C = 2
+   local iter = 1000
+   local lr = .5
+   local x = torch.rand(N,M)
+   local y = torch.rand(N,M)
+   local t = torch.cmul(x[{{},{2}}],y[{{},{2}}]) + torch.cmul(x[{{},{1}}],y[{{},{1}}])
 
    x=x:cuda()
    y=y:cuda()
    t=t:cuda()
 
+   local c = nn.CompactBilinearPooling(C)
    local model = nn.Sequential()
-      :add(nn.CompactBilinearPooling(C))
+      :add(nn.ParallelTable()
+         :add(nn.Sequential()
+            :add(nn.Linear(M,M))
+            :add(nn.ReLU()))  -- negative makes unstability
+         :add(nn.Sequential()
+            :add(nn.Linear(M,M))
+            :add(nn.ReLU())))  -- negative makes unstability
+      :add(c)
       :add(nn.SignedSquareRoot())
+      -- :add(nn.Normalize(2))
       :add(nn.Linear(C,1))
    local criterion = nn.MSECriterion()
 
    model=model:cuda()
    criterion=criterion:cuda()
 
+   model:getParameters():uniform(-.08,.08)
+
    for i=1,iter do
       local output = model:forward{x,y}
       J = criterion:forward(output, t)
+      if 0==i%100 and debug then print(J) end
       local dt = criterion:backward(output, t)
       model:zeroGradParameters()
       model:backward({x,y},dt)
       model:updateParameters(lr)
+
+      if i==1 and debug then
+         print(c.h)
+         print(c.s)
+      end
    end
    assert(J < .2, 'CBP failed to learn (J='..J..')')
 end
