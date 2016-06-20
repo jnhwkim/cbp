@@ -17,7 +17,8 @@ function SignedSquareRoot:updateOutput(input)
 end
 
 function SignedSquareRoot:updateGradInput(input, gradOutput)
-   gradOutput:cmul(self.tmp)
-   self.gradInput = self.module:backward(input, gradOutput)
+   local eps = 1e-1  -- to avoid gradient explosion
+   torch.cmul(self.gradInput, gradOutput, 
+      torch.pow(self.module:forward(input)+eps,-1)/2)
    return self.gradInput
 end
