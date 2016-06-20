@@ -48,8 +48,8 @@ function cbptest.testLearning()
    local N = 1000
    local M = 2
    local C = 2
-   local iter = 1000
-   local lr = .5
+   local iter = 20
+   local lr = .05
    local x = torch.rand(N,M)
    local y = torch.rand(N,M)
    local t = torch.cmul(x[{{},{2}}],y[{{},{2}}]) + torch.cmul(x[{{},{1}}],y[{{},{1}}])
@@ -71,6 +71,10 @@ function cbptest.testLearning()
       :add(nn.SignedSquareRoot())
       -- :add(nn.Normalize(2))
       :add(nn.Linear(C,1))
+
+   -- baseline
+   -- local model = nn.Sequential():add(nn.JoinTable(2)):add(nn.Linear(C*2,1))
+   
    local criterion = nn.MSECriterion()
 
    model=model:cuda()
@@ -78,10 +82,11 @@ function cbptest.testLearning()
 
    model:getParameters():uniform(-.08,.08)
 
+   if debug then print(' ') end
    for i=1,iter do
       local output = model:forward{x,y}
       J = criterion:forward(output, t)
-      if 0==i%100 and debug then print(J) end
+      if 0==i%1 and debug then print(J) end
       local dt = criterion:backward(output, t)
       model:zeroGradParameters()
       model:backward({x,y},dt)
@@ -95,7 +100,8 @@ function cbptest.testLearning()
    assert(J < .2, 'CBP failed to learn (J='..J..')')
 end
 
-function cbp.test(tests)
+function cbp.test(tests, _debug)
+   debug = _debug or false
    mytester = torch.Tester()
    mytester:add(cbptest)
    math.randomseed(os.time())
