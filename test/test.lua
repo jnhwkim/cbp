@@ -63,13 +63,13 @@ function cbptest.testLearning()
       :add(nn.ParallelTable()
          :add(nn.Sequential()
             :add(nn.Linear(M,M))
-            :add(nn.ReLU()))  -- negative makes unstability
+            :add(nn.Tanh()))
          :add(nn.Sequential()
             :add(nn.Linear(M,M))
-            :add(nn.ReLU())))  -- negative makes unstability
+            :add(nn.Tanh())))
       :add(c)
       :add(nn.SignedSquareRoot())
-      -- :add(nn.Normalize(2))
+      :add(nn.Normalize(2))
       :add(nn.Linear(C,1))
 
    -- baseline
