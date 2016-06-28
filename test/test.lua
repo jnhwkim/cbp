@@ -15,7 +15,7 @@ function cbptest.testPsi()
    local tmp = 0
    local c
    for s=1,S do
-      c = nn.CompactBilinearPooling(dim, homogeneous):cuda()
+      c = nn.CompactBilinearPooling(dim, 0, homogeneous):cuda()
       c:forward({x,y})
       tmp = tmp + c.y[1][1]:dot(c.y[2][1])
    end

@@ -21,12 +21,12 @@ function CompactBilinearPooling:reset()
    self.y = torch.Tensor()
    self.gradInput = {}
    self.tmp = torch.Tensor()
-   self.s_ = torch.Tensor()  -- noised s
 end
 
 function CompactBilinearPooling:sample()
    self.h:uniform(0,self.outputSize):ceil()
    self.s:uniform(0,2):floor():mul(2):add(-1)
+   self.s_ = self.s
 end
 
 function CompactBilinearPooling:psi()
@@ -78,12 +78,11 @@ function CompactBilinearPooling:updateOutput(input)
    -- dropout on s
    if self.p > 0 then
       if self.train then
+         self.s_ = torch.Tensor()  -- noised s
          self.s_:resizeAs(self.s)
          self.s_:bernoulli(1-self.p)
          self.s_:div(1-self.p)
          self.s_:cmul(self.s)
-      else
-         self.s_ = self.s
       end
    end
 
