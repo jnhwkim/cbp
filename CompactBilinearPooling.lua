@@ -78,7 +78,7 @@ function CompactBilinearPooling:updateOutput(input)
    -- dropout on s
    if self.p > 0 then
       if self.train then
-         self.s_ = torch.Tensor()  -- noised s
+         self.s_ = self.s.new()  -- noised s
          self.s_:resizeAs(self.s)
          self.s_:bernoulli(1-self.p)
          self.s_:div(1-self.p)
