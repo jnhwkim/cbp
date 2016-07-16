@@ -14,17 +14,22 @@ function CompactBilinearPooling:__init(outputSize, homogeneous)
 end
 
 function CompactBilinearPooling:reset()
-   self.h = torch.Tensor()
-   self.s = torch.Tensor()
+   self.h1 = torch.Tensor()
+   self.h2 = torch.Tensor()
+   self.s1 = torch.Tensor()
+   self.s2 = torch.Tensor()
    self.y = torch.Tensor()
    self.gradInput = {}
    self.tmp = torch.Tensor()
 end
 
 function CompactBilinearPooling:sample()
-   self.h:uniform(0,self.outputSize):ceil()
-   self.s:uniform(0,2):floor():mul(2):add(-1)
+   self.h1:uniform(0,self.outputSize):ceil()
+   self.h2:uniform(0,self.outputSize):ceil()
+   self.s1:uniform(0,2):floor():mul(2):add(-1)
+   self.s2:uniform(0,2):floor():mul(2):add(-1)
 end
+
 
 function CompactBilinearPooling:psi()
    self.y:zero()
@@ -33,7 +38,11 @@ function CompactBilinearPooling:psi()
       if self.homogeneous then  -- using the same samples
          self.y[i]:indexAdd(2,self.h[1],torch.cmul(self.s[1]:repeatTensor(batchSize,1),self.input[i]))
       else
-         self.y[i]:indexAdd(2,self.h[i],torch.cmul(self.s[i]:repeatTensor(batchSize,1),self.input[i]))
+	 if i==1 then
+           self.y[i]:indexAdd(2,self.h1,torch.cmul(self.s1:repeatTensor(batchSize,1),self.input[i]))
+	 else
+	   self.y[i]:indexAdd(2,self.h2,torch.cmul(self.s2:repeatTensor(batchSize,1),self.input[i]))
+	 end
       end
    end
 end
@@ -66,9 +75,11 @@ function CompactBilinearPooling:updateOutput(input)
    local inputSizes1 = input[1]:size()
    local inputSizes2 = input[2]:size()
 
-   if 0==#self.h:size() then
-      self.h:resize(2, inputSizes1[#inputSizes1])
-      self.s:resize(2, inputSizes2[#inputSizes2])
+   if 0==#self.h1:size() then
+      self.h1:resize(inputSizes1[#inputSizes1])
+      self.h2:resize(inputSizes2[#inputSizes2])
+      self.s1:resize(inputSizes1[#inputSizes1])
+      self.s2:resize(inputSizes2[#inputSizes2]) 
       self:sample()  -- samples are fixed
    end
 
@@ -101,8 +112,13 @@ function CompactBilinearPooling:updateGradInput(input, gradOutput)
       self.tmp:resizeAs(gradOutput)
 
       self.tmp = self:conv(gradOutput, self.y[k%2+1])
-      self.gradInput[k]:index(self.tmp, 2, self.h[k])
-      self.gradInput[k]:cmul(self.s[k]:repeatTensor(batchSize,1))
+      if k==1 then
+	self.gradInput[k]:index(self.tmp, 2, self.h1)
+	self.gradInput[k]:cmul(self.s1:repeatTensor(batchSize,1))
+      else
+	self.gradInput[k]:index(self.tmp, 2, self.h2)
+	self.gradInput[k]:cmul(self.s2:repeatTensor(batchSize,1))
+      end
    end
 
    return self.gradInput
