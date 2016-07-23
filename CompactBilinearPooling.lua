@@ -36,7 +36,7 @@ function CompactBilinearPooling:psi()
    local batchSize = self.input[1]:size(1)
    for i=1,2 do
       if self.homogeneous then  -- using the same samples
-         self.y[i]:indexAdd(2,self.h[1],torch.cmul(self.s[1]:repeatTensor(batchSize,1),self.input[i]))
+         self.y[i]:indexAdd(2,self.h1,torch.cmul(self.s1:repeatTensor(batchSize,1),self.input[i]))
       else
 	 if i==1 then
            self.y[i]:indexAdd(2,self.h1,torch.cmul(self.s1:repeatTensor(batchSize,1),self.input[i]))
