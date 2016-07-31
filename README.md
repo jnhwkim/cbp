@@ -1,7 +1,5 @@
 # Multimodal Compact Bilinear Pooling for Torch7
 
-***This code is in development. Highly recommend to send pull requests to resolve many issues!*** 
-
 This implements a module of Multimodal Compact Bilinear Pooling for Torch7 [cunn](https://github.com/torch/cunn).
 
 ### Dependencies
