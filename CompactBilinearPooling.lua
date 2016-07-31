@@ -30,6 +30,16 @@ function CompactBilinearPooling:sample()
    self.s2:uniform(0,2):floor():mul(2):add(-1)
 end
 
+function CompactBilinearPooling:sampleFrom(H1,H2,S1,S2)
+   self.h1 = H1
+   self.h2 = H2
+   self.s1 = S1
+   self.s2 = S2
+end
+
+function CompactBilinearPooling:getHS()
+    return {self.h1,self.h2,self.s1,self.s2}
+end
 
 function CompactBilinearPooling:psi()
    self.y:zero()
