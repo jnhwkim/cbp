@@ -100,10 +100,12 @@ function cbptest.testLearning()
    assert(J < .2, 'CBP failed to learn (J='..J..')')
 end
 
-function cbp.test(tests, _debug)
+function cbptest.test(tests, _debug)
    debug = _debug or false
    mytester = torch.Tester()
    mytester:add(cbptest)
    math.randomseed(os.time())
    mytester:run(tests)
 end
+
+return cbptest
